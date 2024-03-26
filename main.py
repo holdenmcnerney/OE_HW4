@@ -6,7 +6,7 @@ import scipy as sp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-def ss_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
+def ss_kalman_filter(F, G, H, Q, R, x_0, u, y):
     '''
     Temp
     '''
@@ -16,13 +16,13 @@ def ss_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
     # NEED TO ACTUALLY SOLVE FOR P_INF INSTEAD OF TAKING VALUE FROM OTHER RUN
 
-    # P_inf = scipy.linalg.solve_discrete_are(F, G, Q, R)
+    # P_inf = sp.linalg.solve_discrete_are(F, H, Q, R)
+    # print(P_inf)
     P_inf = np.array([[573.56642085, 14.80757623], [14.80757623, 0.77469338]])
     S_inf = H @ P_inf @ H.T + R
     K_inf = P_inf @ H.T * S_inf**-1
 
     for i, (u_k, y_k) in enumerate(zip(u, y)):
-
         if i == 0:
             u_km1 = u_k
         else:
@@ -39,7 +39,7 @@ def ss_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
             u_km1 = u_k
             x_km1_km1 = x_k_k
 
-    return x_hist
+    return x_hist, P_inf
 
 def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
     '''
@@ -52,7 +52,6 @@ def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
     P_km1_km1 = P_0
 
     for i, (u_k, y_k) in enumerate(zip(u, y)):
-
         if i == 0:
             u_km1 = u_k
             P_hist[i] = P_0
@@ -78,19 +77,22 @@ def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
     return x_hist, P_hist
 
-def covariance_intersection_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
+def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
     '''
     Temp
     '''
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
+    P_hist = [0] * len(u)
     x_km1_km1 = x_0
     P_km1_km1 = P_0
+    omega_opt_vec = []
 
     for i, (u_k, y_k) in enumerate(zip(u, y)):
-
         if i == 0:
             u_km1 = u_k
+            P_hist[i] = P_0
+            # omega_opt_vec.append(1)
         else:
             # Prediction Step
             x_k_km1 = F @ x_km1_km1 + G * u_km1
@@ -99,44 +101,90 @@ def covariance_intersection_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
             # Correction Step
             y_diff = y_k - y_k_est
-            find_omega_opt = lambda omega: np.trace(la.inv(omega * la.inv(P_k_km1) \
-                                                            + (1 - omega) * H.T * R**-1 @ H))
-            omega_opt_res = sp.optimize.minimize_scalar(find_omega_opt, 0.5, bounds=(0, 1))
+            find_omega_opt = lambda omega: \
+                                np.trace(la.inv(omega * la.inv(P_k_km1) \
+                                + (1 - omega) * H.T * R**-1 @ H))
+            omega_opt_res = sp.optimize.minimize_scalar(find_omega_opt, 
+                                                        0.5, bounds=(0, 1))
             omega_opt = omega_opt_res.x
+            # omega_opt_vec.append(omega_opt)
             # omega_opt = 0.5
-            P_k_k = np.linalg.inv(omega_opt * la.inv(P_k_km1) \
-                                  + (1 - omega_opt) * H.T * R**-1 @ H)
+            P_k_k = la.inv(omega_opt * la.inv(P_k_km1) 
+                           + (1 - omega_opt) * H.T * R**-1 @ H)
             K_k = (1 - omega_opt) * P_k_k @ H.T * R**-1
             x_k_k = x_k_km1 + K_k * y_diff
 
             # Saving and reseting values
             x_hist[i, :] = np.atleast_2d(x_k_k).T
+            P_hist[i] = P_k_k
             u_km1 = u_k
             x_km1_km1 = x_k_k
             P_km1_km1 = P_k_k
 
-    return x_hist
+    return x_hist, P_hist, omega_opt_vec
 
 def s_kalman_smoother(F, G, Q, u, x_hist, P):
     '''
     Temp
     '''
     x_hist_smoothed = np.zeros((len(u), 2))
+    P_hist_smoothed = [0] * len(u)
 
     for i, (u_k, x_k, P_k) in enumerate(zip(u[::-1], x_hist[::-1], P[::-1])):
         if i == 0:
             x_kp1_N = np.atleast_2d(x_k).T
+            P_kp1_N = P_k
+            P_hist_smoothed[i] = P_k
         else:
             x_k = np.atleast_2d(x_k)
             x_k_diff = x_kp1_N - F @ x_k.T - G * u_k
             K_S_k = P_k @ F.T @ np.linalg.inv(F @ P_k @ F.T + Q)
             x_k_k = x_k.T + K_S_k @ x_k_diff
+            P_k_k = P_k + K_S_k @ (P_kp1_N - F @ P_k @ F.T - Q) @ K_S_k.T
             x_hist_smoothed[i, :] = np.atleast_2d(x_k_k).T
-            # P update
+            P_hist_smoothed[i] = P_k_k
 
             x_kp1_N = x_k.T
+            P_kp1_N = P_k
     
-    return x_hist_smoothed
+    return x_hist_smoothed, P_hist_smoothed
+
+def make_pretty_plots(f_type, time, f_hist, b_hist, P_hist, f_k_act, b_k_act):
+    '''
+    Temp
+    '''
+    if isinstance(P_hist, np.ndarray):
+        sigma_f = 2 * np.sqrt(P_hist[0][0])
+        sigma_b = 2 * np.sqrt(P_hist[1][1])
+    else:
+        sigma_f = [2 * np.sqrt(P[0][0]) for P in P_hist]
+        sigma_b = [2 * np.sqrt(P[1][1]) for P in P_hist]
+
+    fig, ax = plt.subplots(2, 1)
+    fig.suptitle(f'''{f_type} - Fuel Remaining and Flow Meter Bias vs Time''')
+    fig.supxlabel(r'Time, $s$')
+    ax[0].set_ylabel(r'Fuel Remaining, $cm^3$')
+    ax[0].plot(time, f_hist, color='r',label=f'''{f_type}''')
+    ax[0].plot(time, f_hist + sigma_f, 
+               color='g',label=f'''{f_type} $\pm 2\sigma$''')
+    ax[0].plot(time, f_hist - sigma_f, 
+               color='g',label=f'''{f_type} $\pm 2\sigma$''')
+    ax[0].plot(time, f_k_act, color='b',label='Estimate')
+    ax[1].set_ylabel(r'Flow Meter Bias, $cm$')
+    ax[1].plot(time, b_hist, color='r',label=f'''{f_type}''')
+    ax[1].plot(time, b_hist + sigma_b, 
+               color='g', label=f'''{f_type} $\pm 2\sigma$''')
+    ax[1].plot(time, b_hist - sigma_b, 
+               color='g',label=f'''{f_type} $\pm 2\sigma$''')
+    ax[1].plot(time, b_k_act, color='b',label='Estimate')
+    handles, labels = ax[0].get_legend_handles_labels()
+    ax[0].legend([handles[0], handles[1], handles[3]],
+                 [labels[0], labels[1], labels[3]])
+    ax[1].legend([handles[0], handles[1], handles[3]],
+                 [labels[0], labels[1], labels[3]])
+    plt.show()
+
+    return 1
 
 def main():
     '''
@@ -166,17 +214,26 @@ def main():
     G = np.array([[-A_line * dt], [0]])
     H = np.atleast_2d(np.array([A_tank**-1, 0]))
 
-    # SS_KF_hist = ss_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
-    S_KF_hist = s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
-    # CI_KF_hist = covariance_intersection_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
-    S_KS_hist = s_kalman_smoother(F, G, Q, u, S_KF_hist[0], S_KF_hist[1])
+    SS_KF_x_hist, SS_KF_P_hist = ss_kalman_filter(F, G, H, Q, R, x_0, u, y)
+    S_KF_x_hist, S_KF_P_hist = s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
+    CI_KF_x_hist, CI_KF_P_hist, omega_vec = ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
+    S_KS_x_hist, S_KS_P_hist = s_kalman_smoother(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
 
-    plt.plot(time, S_KF_hist[0][:, 0])
-    plt.plot(time, S_KS_hist[:, 0][::-1])
-    plt.plot(time, f_k_act)
-    # plt.plot(time, CI_KF_hist[:, 1])
-    # plt.plot(time, b_k_act)
-    plt.show()
+    # plt.plot(time, omega_vec)
+    # plt.show()
+    # print(omega_vec[-1])
+    make_pretty_plots('Steady State KF', time, 
+                      SS_KF_x_hist[:, 0], SS_KF_x_hist[:, 1], SS_KF_P_hist, 
+                      f_k_act, b_k_act)
+    make_pretty_plots('Standard KF', time, 
+                      S_KF_x_hist[:, 0], S_KF_x_hist[:, 1], S_KF_P_hist, 
+                      f_k_act, b_k_act)
+    make_pretty_plots('Covariance Intersection KF', time, 
+                      CI_KF_x_hist[:, 0], CI_KF_x_hist[:, 1], CI_KF_P_hist, 
+                      f_k_act, b_k_act)
+    make_pretty_plots('Standard KS', time, 
+                      S_KS_x_hist[:, 0][::-1], S_KS_x_hist[:, 1][::-1], S_KS_P_hist[::-1], 
+                      f_k_act, b_k_act)
 
     return 1
 
