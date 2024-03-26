@@ -133,6 +133,7 @@ def s_kalman_smoother(F, G, Q, u, x_hist, P):
     for i, (u_k, x_k, P_k) in enumerate(zip(u[::-1], x_hist[::-1], P[::-1])):
         if i == 0:
             x_kp1_N = np.atleast_2d(x_k).T
+            x_hist_smoothed[i, :] = x_kp1_N.T
             P_kp1_N = P_k
             P_hist_smoothed[i] = P_k
         else:
