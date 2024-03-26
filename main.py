@@ -223,17 +223,17 @@ def main():
     # plt.show()
     # print(omega_vec[-1])
     make_pretty_plots('Steady State KF', time, 
-                      SS_KF_x_hist[:, 0], SS_KF_x_hist[:, 1], SS_KF_P_hist, 
-                      f_k_act, b_k_act)
+                      SS_KF_x_hist[:, 0], SS_KF_x_hist[:, 1], 
+                      SS_KF_P_hist, f_k_act, b_k_act)
     make_pretty_plots('Standard KF', time, 
-                      S_KF_x_hist[:, 0], S_KF_x_hist[:, 1], S_KF_P_hist, 
-                      f_k_act, b_k_act)
+                      S_KF_x_hist[:, 0], S_KF_x_hist[:, 1], 
+                      S_KF_P_hist, f_k_act, b_k_act)
     make_pretty_plots('Covariance Intersection KF', time, 
-                      CI_KF_x_hist[:, 0], CI_KF_x_hist[:, 1], CI_KF_P_hist, 
-                      f_k_act, b_k_act)
+                      CI_KF_x_hist[:, 0], CI_KF_x_hist[:, 1], 
+                      CI_KF_P_hist, f_k_act, b_k_act)
     make_pretty_plots('Standard KS', time, 
-                      S_KS_x_hist[:, 0][::-1], S_KS_x_hist[:, 1][::-1], S_KS_P_hist[::-1], 
-                      f_k_act, b_k_act)
+                      S_KS_x_hist[:, 0][::-1], S_KS_x_hist[:, 1][::-1], 
+                      S_KS_P_hist[::-1], f_k_act, b_k_act)
 
     return 1
 
