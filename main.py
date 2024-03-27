@@ -13,11 +13,8 @@ def ss_kalman_filter(F, G, H, Q, R, x_0, u, y):
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
     x_km1_km1 = x_0
-
-    # NEED TO ACTUALLY SOLVE FOR P_INF INSTEAD OF TAKING VALUE FROM OTHER RUN
-
-    # P_inf = sp.linalg.solve_discrete_are(F, H, Q, R)
-    # print(P_inf)
+    # Using the steady state P value from the standard kalman filter as P_inf
+    # P_inf = sp.linalg.solve_discrete_are(F, G, Q, R)
     P_inf = np.array([[573.56642085, 14.80757623], [14.80757623, 0.77469338]])
     S_inf = H @ P_inf @ H.T + R
     K_inf = P_inf @ H.T * S_inf**-1
@@ -92,7 +89,7 @@ def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
         if i == 0:
             u_km1 = u_k
             P_hist[i] = P_0
-            # omega_opt_vec.append(1)
+            omega_opt_vec.append(1)
         else:
             # Prediction Step
             x_k_km1 = F @ x_km1_km1 + G * u_km1
@@ -108,7 +105,6 @@ def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
                                                         0.5, bounds=(0, 1))
             omega_opt = omega_opt_res.x
             # omega_opt_vec.append(omega_opt)
-            # omega_opt = 0.5
             P_k_k = la.inv(omega_opt * la.inv(P_k_km1) 
                            + (1 - omega_opt) * H.T * R**-1 @ H)
             K_k = (1 - omega_opt) * P_k_k @ H.T * R**-1
@@ -220,9 +216,6 @@ def main():
     CI_KF_x_hist, CI_KF_P_hist, omega_vec = ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
     S_KS_x_hist, S_KS_P_hist = s_kalman_smoother(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
 
-    # plt.plot(time, omega_vec)
-    # plt.show()
-    # print(omega_vec[-1])
     make_pretty_plots('Steady State KF', time, 
                       SS_KF_x_hist[:, 0], SS_KF_x_hist[:, 1], 
                       SS_KF_P_hist, f_k_act, b_k_act)
