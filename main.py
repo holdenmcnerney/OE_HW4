@@ -1,4 +1,4 @@
-# Optimal Estimation - HW3 - Battery Equivalent Circuit Model Design
+# Optimal Estimation - HW4 - Fuel Monitoring System Design
 
 import numpy as np
 import numpy.linalg as la
