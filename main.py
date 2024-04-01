@@ -6,16 +6,16 @@ import scipy as sp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-def ss_kalman_filter(F, G, H, Q, R, x_0, u, y):
+def ss_kalman_filter(F, G, H, Q, R, x_0, P_inf, u, y):
     '''
-    Temp
+    Function for steady state kalman filter.
+    Returns state hist and covariance history.
     '''
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
     x_km1_km1 = x_0
     # Using the steady state P value from the standard kalman filter as P_inf
     # P_inf = sp.linalg.solve_discrete_are(F, G, Q, R)
-    P_inf = np.array([[573.56642085, 14.80757623], [14.80757623, 0.77469338]])
     S_inf = H @ P_inf @ H.T + R
     K_inf = P_inf @ H.T * S_inf**-1
 
@@ -40,7 +40,8 @@ def ss_kalman_filter(F, G, H, Q, R, x_0, u, y):
 
 def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
     '''
-    Temp
+    Function for standard kalman filter.
+    Returns state hist and covariance history.
     '''
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
@@ -76,20 +77,19 @@ def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
 def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
     '''
-    Temp
+    Function for covariance intersection kalman filter.
+    Returns state hist and covariance history.
     '''
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
     P_hist = [0] * len(u)
     x_km1_km1 = x_0
     P_km1_km1 = P_0
-    omega_opt_vec = []
 
     for i, (u_k, y_k) in enumerate(zip(u, y)):
         if i == 0:
             u_km1 = u_k
             P_hist[i] = P_0
-            omega_opt_vec.append(1)
         else:
             # Prediction Step
             x_k_km1 = F @ x_km1_km1 + G * u_km1
@@ -102,9 +102,8 @@ def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
                                 np.trace(la.inv(omega * la.inv(P_k_km1) \
                                 + (1 - omega) * H.T * R**-1 @ H))
             omega_opt_res = sp.optimize.minimize_scalar(find_omega_opt, 
-                                                        0.5, bounds=(0, 1))
+                                                        0.5, bounds=(0, 0.95))
             omega_opt = omega_opt_res.x
-            # omega_opt_vec.append(omega_opt)
             P_k_k = la.inv(omega_opt * la.inv(P_k_km1) 
                            + (1 - omega_opt) * H.T * R**-1 @ H)
             K_k = (1 - omega_opt) * P_k_k @ H.T * R**-1
@@ -117,11 +116,12 @@ def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
             x_km1_km1 = x_k_k
             P_km1_km1 = P_k_k
 
-    return x_hist, P_hist, omega_opt_vec
+    return x_hist, P_hist
 
 def s_kalman_smoother(F, G, Q, u, x_hist, P):
     '''
-    Temp
+    Function for standard kalman smoother.
+    Returns state hist and covariance history.
     '''
     x_hist_smoothed = np.zeros((len(u), 2))
     P_hist_smoothed = [0] * len(u)
@@ -133,14 +133,16 @@ def s_kalman_smoother(F, G, Q, u, x_hist, P):
             P_kp1_N = P_k
             P_hist_smoothed[i] = P_k
         else:
+            # Smoothing correction
             x_k = np.atleast_2d(x_k)
             x_k_diff = x_kp1_N - F @ x_k.T - G * u_k
             K_S_k = P_k @ F.T @ np.linalg.inv(F @ P_k @ F.T + Q)
             x_k_k = x_k.T + K_S_k @ x_k_diff
             P_k_k = P_k + K_S_k @ (P_kp1_N - F @ P_k @ F.T - Q) @ K_S_k.T
+
+            # Saving and reseting values
             x_hist_smoothed[i, :] = np.atleast_2d(x_k_k).T
             P_hist_smoothed[i] = P_k_k
-
             x_kp1_N = x_k.T
             P_kp1_N = P_k
     
@@ -148,7 +150,7 @@ def s_kalman_smoother(F, G, Q, u, x_hist, P):
 
 def make_pretty_plots(f_type, time, f_hist, b_hist, P_hist, f_k_act, b_k_act):
     '''
-    Temp
+    Makes plots
     '''
     if isinstance(P_hist, np.ndarray):
         sigma_f = 2 * np.sqrt(P_hist[0][0])
@@ -211,11 +213,14 @@ def main():
     G = np.array([[-A_line * dt], [0]])
     H = np.atleast_2d(np.array([A_tank**-1, 0]))
 
-    SS_KF_x_hist, SS_KF_P_hist = ss_kalman_filter(F, G, H, Q, R, x_0, u, y)
+    # Generate data for all three filters and one smoother
     S_KF_x_hist, S_KF_P_hist = s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
-    CI_KF_x_hist, CI_KF_P_hist, omega_vec = ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
+    P_inf = S_KF_P_hist[-1]
+    SS_KF_x_hist, SS_KF_P_hist = ss_kalman_filter(F, G, H, Q, R, x_0, P_inf, u, y)
+    CI_KF_x_hist, CI_KF_P_hist = ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
     S_KS_x_hist, S_KS_P_hist = s_kalman_smoother(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
 
+    # Plots all data
     make_pretty_plots('Steady State KF', time, 
                       SS_KF_x_hist[:, 0], SS_KF_x_hist[:, 1], 
                       SS_KF_P_hist, f_k_act, b_k_act)
