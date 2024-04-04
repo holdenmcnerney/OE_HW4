@@ -6,7 +6,10 @@ import scipy as sp
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-def ss_kalman_filter(F, G, H, Q, R, x_0, P_inf, u, y):
+# Matplotlib global variables
+plt.rcParams['axes.grid'] = True
+
+def ss_kf(F, G, H, Q, R, x_0, P_inf, u, y):
     '''
     Function for steady state kalman filter.
     Returns state hist and covariance history.
@@ -38,7 +41,7 @@ def ss_kalman_filter(F, G, H, Q, R, x_0, P_inf, u, y):
 
     return x_hist, P_inf
 
-def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
+def s_kf(F, G, H, Q, R, x_0, P_0, u, y):
     '''
     Function for standard kalman filter.
     Returns state hist and covariance history.
@@ -75,7 +78,7 @@ def s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
     return x_hist, P_hist
 
-def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
+def ci_kf(F, G, H, Q, R, x_0, P_0, u, y):
     '''
     Function for covariance intersection kalman filter.
     Returns state hist and covariance history.
@@ -118,7 +121,7 @@ def ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y):
 
     return x_hist, P_hist
 
-def s_kalman_smoother(F, G, Q, u, x_hist, P):
+def s_ks(F, G, Q, u, x_hist, P):
     '''
     Function for standard kalman smoother.
     Returns state hist and covariance history.
@@ -158,29 +161,42 @@ def make_pretty_plots(f_type, time, f_hist, b_hist, P_hist, f_k_act, b_k_act):
     else:
         sigma_f = [2 * np.sqrt(P[0][0]) for P in P_hist]
         sigma_b = [2 * np.sqrt(P[1][1]) for P in P_hist]
-
-    fig, ax = plt.subplots(2, 1)
+    # Fuel Remaining plotting
+    fig, ax = plt.subplots(2, 2)
     fig.suptitle(f'''{f_type} - Fuel Remaining and Flow Meter Bias vs Time''')
-    fig.supxlabel(r'Time, $s$')
-    ax[0].set_ylabel(r'Fuel Remaining, $cm^3$')
-    ax[0].plot(time, f_hist, color='r',label=f'''{f_type}''')
-    ax[0].plot(time, f_hist + sigma_f, 
+    ax[0, 0].set_ylabel(r'Fuel Remaining, $cm^3$')
+    ax[0, 0].plot(time, f_hist, color='r',label=f'''{f_type}''')
+    ax[0, 0].plot(time, f_k_act, color='b',label='Estimate')
+    # Flow Meter Bias plotting
+    ax[1, 0].set_xlabel(r'Time, $s$')
+    ax[1, 0].set_ylabel(r'Flow Meter Bias, $cm$')
+    ax[1, 0].plot(time, b_hist, color='r',label=f'''{f_type}''')
+    ax[1, 0].plot(time, b_k_act, color='b',label='Estimate')
+    handles, labels = ax[0, 0].get_legend_handles_labels()
+    ax[0, 0].legend()
+    ax[1, 0].legend()
+    # Fuel Remaining ERROR plotting
+    f_error = f_hist - f_k_act
+    ax[0, 1].set_ylabel(r'Fuel Remaining Error, $cm^3$')
+    ax[0, 1].plot(time, f_error, color='r',label=f'''{f_type}''')
+    ax[0, 1].plot(time, f_error + sigma_f, 
                color='g',label=f'''{f_type} $\pm 2\sigma$''')
-    ax[0].plot(time, f_hist - sigma_f, 
+    ax[0, 1].plot(time, f_error - sigma_f, 
                color='g',label=f'''{f_type} $\pm 2\sigma$''')
-    ax[0].plot(time, f_k_act, color='b',label='Estimate')
-    ax[1].set_ylabel(r'Flow Meter Bias, $cm$')
-    ax[1].plot(time, b_hist, color='r',label=f'''{f_type}''')
-    ax[1].plot(time, b_hist + sigma_b, 
+    # Flow Meter Bias ERROR plotting
+    ax[1, 1].set_xlabel(r'Time, $s$')
+    b_error = b_hist - b_k_act
+    ax[1, 1].set_ylabel(r'Flow Meter Bias Error, $cm$')
+    ax[1, 1].plot(time, b_error, color='r',label=f'''{f_type}''')
+    ax[1, 1].plot(time, b_error + sigma_b, 
                color='g', label=f'''{f_type} $\pm 2\sigma$''')
-    ax[1].plot(time, b_hist - sigma_b, 
+    ax[1, 1].plot(time, b_error - sigma_b, 
                color='g',label=f'''{f_type} $\pm 2\sigma$''')
-    ax[1].plot(time, b_k_act, color='b',label='Estimate')
-    handles, labels = ax[0].get_legend_handles_labels()
-    ax[0].legend([handles[0], handles[1], handles[3]],
-                 [labels[0], labels[1], labels[3]])
-    ax[1].legend([handles[0], handles[1], handles[3]],
-                 [labels[0], labels[1], labels[3]])
+    handles, labels = ax[1, 1].get_legend_handles_labels()
+    ax[0, 1].legend([handles[0], handles[1]],
+                 [labels[0], labels[1]])
+    ax[1, 1].legend([handles[0], handles[1]],
+                 [labels[0], labels[1]])
     plt.show()
 
     return 1
@@ -214,11 +230,11 @@ def main():
     H = np.atleast_2d(np.array([A_tank**-1, 0]))
 
     # Generate data for all three filters and one smoother
-    S_KF_x_hist, S_KF_P_hist = s_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
+    S_KF_x_hist, S_KF_P_hist = s_kf(F, G, H, Q, R, x_0, P_0, u, y)
     P_inf = S_KF_P_hist[-1]
-    SS_KF_x_hist, SS_KF_P_hist = ss_kalman_filter(F, G, H, Q, R, x_0, P_inf, u, y)
-    CI_KF_x_hist, CI_KF_P_hist = ci_kalman_filter(F, G, H, Q, R, x_0, P_0, u, y)
-    S_KS_x_hist, S_KS_P_hist = s_kalman_smoother(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
+    SS_KF_x_hist, SS_KF_P_hist = ss_kf(F, G, H, Q, R, x_0, P_inf, u, y)
+    CI_KF_x_hist, CI_KF_P_hist = ci_kf(F, G, H, Q, R, x_0, P_0, u, y)
+    S_KS_x_hist, S_KS_P_hist = s_ks(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
 
     # Plots all data
     make_pretty_plots('Steady State KF', time, 
