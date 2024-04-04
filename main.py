@@ -39,7 +39,7 @@ def ss_kf(F, G, H, Q, R, x_0, P_inf, u, y):
             u_km1 = u_k
             x_km1_km1 = x_k_k
 
-    return x_hist, P_inf
+    return x_hist, P_inf, K_inf
 
 def s_kf(F, G, H, Q, R, x_0, P_0, u, y):
     '''
@@ -49,6 +49,7 @@ def s_kf(F, G, H, Q, R, x_0, P_0, u, y):
     x_hist = np.zeros((len(u), 2))
     x_hist[0, :] = np.atleast_2d(x_0).T
     P_hist = [0] * len(u)
+    K_hist = [0] * len(u)
     x_km1_km1 = x_0
     P_km1_km1 = P_0
 
@@ -72,11 +73,12 @@ def s_kf(F, G, H, Q, R, x_0, P_0, u, y):
             # Saving and reseting values
             x_hist[i, :] = np.atleast_2d(x_k_k).T
             P_hist[i] = P_k_k
+            K_hist[i] = K_k
             u_km1 = u_k
             x_km1_km1 = x_k_k
             P_km1_km1 = P_k_k
 
-    return x_hist, P_hist
+    return x_hist, P_hist, K_hist
 
 def ci_kf(F, G, H, Q, R, x_0, P_0, u, y):
     '''
@@ -199,7 +201,25 @@ def make_pretty_plots(f_type, time, f_hist, b_hist, P_hist, f_k_act, b_k_act):
                  [labels[0], labels[1]])
     plt.show()
 
-    return 1
+    return 0
+
+def plot_kalman_gains(time, K_inf, K_hist):
+    '''
+    Makes more plots
+    '''
+    fig, ax = plt.subplots(2)
+    fig.suptitle(f'''Steady State and Standard Kalman Gains vs Time''')
+    ax[0].set_ylabel(r'K First Component')
+    K0 = [k[0] for k in K_hist[1:]]
+    K1 = [k[1] for k in K_hist[1:]]
+    ax[0].plot(time[1:], K0, color='r', label='Standard KF Gain')
+    ax[0].axhline(K_inf[0], color='b', label='Steady State KF Gain')
+    ax[1].set_ylabel(r'K Second Component')
+    ax[1].set_xlabel(r'Time, $s$')
+    ax[1].plot(time[1:], K1, color='r', label='Standard KF Gain')
+    ax[1].axhline(K_inf[1], color='b', label='Steady State KF Gain')
+    plt.show()
+    return 0
 
 def main():
     '''
@@ -230,9 +250,9 @@ def main():
     H = np.atleast_2d(np.array([A_tank**-1, 0]))
 
     # Generate data for all three filters and one smoother
-    S_KF_x_hist, S_KF_P_hist = s_kf(F, G, H, Q, R, x_0, P_0, u, y)
+    S_KF_x_hist, S_KF_P_hist, K_hist = s_kf(F, G, H, Q, R, x_0, P_0, u, y)
     P_inf = S_KF_P_hist[-1]
-    SS_KF_x_hist, SS_KF_P_hist = ss_kf(F, G, H, Q, R, x_0, P_inf, u, y)
+    SS_KF_x_hist, SS_KF_P_hist, K_inf = ss_kf(F, G, H, Q, R, x_0, P_inf, u, y)
     CI_KF_x_hist, CI_KF_P_hist = ci_kf(F, G, H, Q, R, x_0, P_0, u, y)
     S_KS_x_hist, S_KS_P_hist = s_ks(F, G, Q, u, S_KF_x_hist, S_KF_P_hist)
 
@@ -243,6 +263,7 @@ def main():
     make_pretty_plots('Standard KF', time, 
                       S_KF_x_hist[:, 0], S_KF_x_hist[:, 1], 
                       S_KF_P_hist, f_k_act, b_k_act)
+    plot_kalman_gains(time, K_inf, K_hist)
     make_pretty_plots('Covariance Intersection KF', time, 
                       CI_KF_x_hist[:, 0], CI_KF_x_hist[:, 1], 
                       CI_KF_P_hist, f_k_act, b_k_act)
@@ -250,7 +271,7 @@ def main():
                       S_KS_x_hist[:, 0][::-1], S_KS_x_hist[:, 1][::-1], 
                       S_KS_P_hist[::-1], f_k_act, b_k_act)
 
-    return 1
+    return 0
 
 if __name__=='__main__':
     main()
